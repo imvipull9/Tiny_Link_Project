@@ -2,7 +2,7 @@ const { Pool } = require("pg");
 require("dotenv").config();
 
 if (!process.env.DATABASE_URL) {
-  console.error("❌ ERROR: DATABASE_URL is missing in .env");
+  console.error("ERROR: DATABASE_URL is missing in .env");
   process.exit(1);
 }
 
@@ -12,9 +12,9 @@ const pool = new Pool({
 });
 
 pool.connect()
-  .then(() => console.log("✅ PostgreSQL connected"))
+  .then(() => console.log("PostgreSQL connected"))
   .catch((err) => {
-    console.error("❌ Database connection failed:", err.message);
+    console.error("Database connection failed:", err.message);
     process.exit(1);
   });
 
