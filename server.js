@@ -8,13 +8,20 @@ dotenv.config();
 require("./db");
 const pool = require("./db");
 
-
 const app = express();
 
 const PORT = process.env.PORT || 5000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
 
-app.use(cors({ origin: CLIENT_ORIGIN }));
+// Your Vercel frontend URL (IMPORTANT)
+const CLIENT_ORIGIN = "https://tiny-link-project-frontend-88ts8d67y-vipuls-projects-18de4f87.vercel.app";
+
+// ----------------- CORS FIX -----------------
+app.use(cors({
+  origin: CLIENT_ORIGIN,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+}));
+
 app.use(express.json());
 
 // ----------------- Helpers -----------------
@@ -121,7 +128,7 @@ app.get("/api/links", async (req, res) => {
              clicks,
              created_at AS "createdAt"
       FROM short_links
-      ORDER BY created_at DESC
+      ORDERORDER BY created_at DESC
     `;
 
     const result = await pool.query(query);
