@@ -8,9 +8,10 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }   // Neon ALWAYS requires SSL
 });
 
+// Single shared connection
 pool.connect()
   .then(() => console.log("PostgreSQL connected"))
   .catch((err) => {
