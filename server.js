@@ -128,7 +128,7 @@ app.get("/api/links", async (req, res) => {
              clicks,
              created_at AS "createdAt"
       FROM short_links
-      ORDERORDER BY created_at DESC
+      ORDER BY created_at DESC
     `;
 
     const result = await pool.query(query);
@@ -217,5 +217,5 @@ app.get("/:code", async (req, res) => {
 
 // ----------------- Start server -----------------
 app.listen(PORT, () => {
-  console.log(`TinyLink backend running on port ${PORT}`);
+  console.log(`Tasklink backend running on port ${PORT}`);
 });
