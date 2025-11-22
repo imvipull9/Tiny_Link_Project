@@ -4,25 +4,27 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
-// Load DB connection
-require("./db");
+// DB
 const pool = require("./db");
 
 const app = express();
-
 const PORT = process.env.PORT || 5000;
 
-// Your Vercel frontend URL (IMPORTANT)
-const CLIENT_ORIGIN = "https://tiny-link-project-frontend-88ts8d67y-vipuls-projects-18de4f87.vercel.app";
-
-// ----------------- CORS FIX -----------------
-app.use(cors({
-  origin: CLIENT_ORIGIN,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  credentials: true,
-}));
+// ----------------- CORS (FULLY FIXED) -----------------
+app.use(
+  cors({
+    origin: process.env.CLIENT_ORIGIN, // MUST match Vercel domain
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+  })
+);
 
 app.use(express.json());
+
+// ----------------- Root Route -----------------
+app.get("/", (req, res) => {
+  res.send("TinyLink Backend Running Successfully");
+});
 
 // ----------------- Helpers -----------------
 const CODE_REGEX = /^[A-Za-z0-9]{6,8}$/;
@@ -37,7 +39,8 @@ function isValidUrl(str) {
 }
 
 function generateRandomCode(length = 6) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let result = "";
   for (let i = 0; i < length; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -45,16 +48,12 @@ function generateRandomCode(length = 6) {
   return result;
 }
 
-// ----------------- Healthcheck -----------------
+// ----------------- Health Check -----------------
 app.get("/healthz", (req, res) => {
-  res.status(200).json({
-    ok: true,
-    version: "1.0",
-    uptime: process.uptime(),
-  });
+  res.json({ ok: true, status: "running" });
 });
 
-// ----------------- Create short link -----------------
+// ----------------- Create Short URL -----------------
 app.post("/api/links", async (req, res) => {
   try {
     const { targetUrl, code: customCode } = req.body;
@@ -69,39 +68,37 @@ app.post("/api/links", async (req, res) => {
 
     let finalCode = customCode?.trim();
 
-    // If custom code provided
     if (finalCode) {
       if (!CODE_REGEX.test(finalCode)) {
-        return res.status(400).json({
-          error: "Custom code must be 6–8 alphanumeric characters",
-        });
+        return res
+          .status(400)
+          .json({ error: "Custom code must be 6–8 alphanumeric chars" });
       }
 
-      const existing = await pool.query(
+      const exists = await pool.query(
         "SELECT short_id FROM short_links WHERE short_id = $1",
         [finalCode]
       );
 
-      if (existing.rows.length > 0) {
+      if (exists.rows.length > 0) {
         return res.status(409).json({ error: "Short code already exists" });
       }
     } else {
-      // Generate unique code
-      let isUnique = false;
-      while (!isUnique) {
+      let unique = false;
+      while (!unique) {
         const candidate = generateRandomCode(6);
-        const existing = await pool.query(
+        const exists = await pool.query(
           "SELECT short_id FROM short_links WHERE short_id = $1",
           [candidate]
         );
-        if (existing.rows.length === 0) {
+        if (exists.rows.length === 0) {
           finalCode = candidate;
-          isUnique = true;
+          unique = true;
         }
       }
     }
 
-    const insertQuery = `
+    const query = `
       INSERT INTO short_links (short_id, original_url)
       VALUES ($1, $2)
       RETURNING short_id AS code,
@@ -110,8 +107,7 @@ app.post("/api/links", async (req, res) => {
                 created_at AS "createdAt"
     `;
 
-    const result = await pool.query(insertQuery, [finalCode, targetUrl]);
-
+    const result = await pool.query(query, [finalCode, targetUrl]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("Create link error:", err);
@@ -119,7 +115,7 @@ app.post("/api/links", async (req, res) => {
   }
 });
 
-// ----------------- List all links -----------------
+// ----------------- List All Links -----------------
 app.get("/api/links", async (req, res) => {
   try {
     const query = `
@@ -139,7 +135,7 @@ app.get("/api/links", async (req, res) => {
   }
 });
 
-// ----------------- Get link stats -----------------
+// ----------------- Stats for Single Link -----------------
 app.get("/api/links/:code", async (req, res) => {
   try {
     const { code } = req.params;
@@ -156,33 +152,33 @@ app.get("/api/links/:code", async (req, res) => {
     const result = await pool.query(query, [code]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Short code not found" });
+      return res.status(404).json({ error: "Not found" });
     }
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("Get stats error:", err);
+    console.error("Stats error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// ----------------- Delete link -----------------
+// ----------------- Delete Link -----------------
 app.delete("/api/links/:code", async (req, res) => {
   try {
     const { code } = req.params;
 
-    const deleteResult = await pool.query(
+    const result = await pool.query(
       "DELETE FROM short_links WHERE short_id = $1",
       [code]
     );
 
-    if (deleteResult.rowCount === 0) {
-      return res.status(404).json({ error: "Short code not found" });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Not found" });
     }
 
-    res.json({ ok: true, message: "Link deleted" });
+    res.json({ ok: true, message: "Deleted" });
   } catch (err) {
-    console.error("Delete link error:", err);
+    console.error("Delete error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -192,30 +188,30 @@ app.get("/:code", async (req, res) => {
   try {
     const { code } = req.params;
 
-    const result = await pool.query(
+    const data = await pool.query(
       "SELECT original_url FROM short_links WHERE short_id = $1",
       [code]
     );
 
-    if (result.rows.length === 0) {
+    if (data.rows.length === 0) {
       return res.status(404).send("Short link not found");
     }
 
-    const targetUrl = result.rows[0].original_url;
+    const targetUrl = data.rows[0].original_url;
 
     await pool.query(
       "UPDATE short_links SET clicks = clicks + 1 WHERE short_id = $1",
       [code]
     );
 
-    res.redirect(302, targetUrl);
+    res.redirect(targetUrl);
   } catch (err) {
     console.error("Redirect error:", err);
     res.status(500).send("Internal server error");
   }
 });
 
-// ----------------- Start server -----------------
+// ----------------- Start Server -----------------
 app.listen(PORT, () => {
-  console.log(`Tasklink backend running on port ${PORT}`);
+  console.log(`TinyLink backend running on port ${PORT}`);
 });
