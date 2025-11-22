@@ -1,23 +1,33 @@
 const { Pool } = require("pg");
-require("dotenv").config();
+const dotenv = require("dotenv");
+
+dotenv.config();
 
 if (!process.env.DATABASE_URL) {
-  console.error("❌ DATABASE_URL missing in .env");
+  console.error("❌ ERROR: DATABASE_URL is missing in .env");
   process.exit(1);
 }
 
-// Single global pool — no manual connect()
+const isProduction = process.env.NODE_ENV === "production";
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: isProduction
+    ? { rejectUnauthorized: false } // required for Neon on Render
+    : false,
+  idleTimeoutMillis: 30000, // connection cleanup
+  connectionTimeoutMillis: 5000, // avoid hanging
 });
 
-// Test query (light)
+// Test connection ONCE
 pool
-  .query("SELECT NOW()")
-  .then(() => console.log("✅ PostgreSQL connected"))
+  .connect()
+  .then((client) => {
+    console.log("✅ PostgreSQL connected");
+    client.release();
+  })
   .catch((err) => {
-    console.error("❌ DB connection failed:", err.message);
+    console.error("❌ Database connection failed:", err.message);
     process.exit(1);
   });
 
