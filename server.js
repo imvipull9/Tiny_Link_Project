@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5000;
 // ---------------------- CORS ----------------------
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN,
+    origin: process.env.CLIENT_ORIGIN, // only Vercel frontend allowed
     methods: ["GET", "POST", "DELETE"],
   })
 );
@@ -48,7 +48,7 @@ function generateCode(length = 6) {
 // ---------------------- CREATE SHORT LINK ----------------------
 app.post("/api/links", async (req, res) => {
   try {
-    const { original_url, short_id } = req.body; // ✅ FIXED
+    const { original_url, short_id } = req.body;
 
     if (!original_url || !isValidUrl(original_url)) {
       return res.status(400).json({ error: "Valid original_url is required" });
@@ -56,10 +56,10 @@ app.post("/api/links", async (req, res) => {
 
     let finalCode = short_id?.trim();
 
-    // If custom short_id provided, check if exists
+    // Custom short id
     if (finalCode) {
       const exists = await pool.query(
-        "SELECT short_id FROM short_links WHERE short_id=$1",
+        "SELECT short_id FROM short_links WHERE short_id = $1",
         [finalCode]
       );
 
@@ -67,12 +67,12 @@ app.post("/api/links", async (req, res) => {
         return res.status(409).json({ error: "Short ID already exists" });
       }
     } else {
-      // Auto-generate unique short_id
+      // Auto-generate unique short id
       let unique = false;
       while (!unique) {
         const candidate = generateCode(6);
         const exists = await pool.query(
-          "SELECT short_id FROM short_links WHERE short_id=$1",
+          "SELECT short_id FROM short_links WHERE short_id = $1",
           [candidate]
         );
         if (exists.rows.length === 0) {
@@ -105,7 +105,6 @@ app.get("/api/links", async (req, res) => {
       FROM short_links
       ORDER BY created_at DESC
     `;
-
     const result = await pool.query(q);
     res.json(result.rows);
   } catch (err) {
@@ -118,7 +117,7 @@ app.get("/api/links", async (req, res) => {
 app.delete("/api/links/:short_id", async (req, res) => {
   try {
     const deleted = await pool.query(
-      "DELETE FROM short_links WHERE short_id=$1",
+      "DELETE FROM short_links WHERE short_id = $1",
       [req.params.short_id]
     );
 
@@ -133,11 +132,11 @@ app.delete("/api/links/:short_id", async (req, res) => {
   }
 });
 
-// ---------------------- REDIRECT ----------------------
+// ---------------------- REDIRECT (MUST BE LAST ROUTE) ----------------------
 app.get("/:short_id", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT original_url FROM short_links WHERE short_id=$1",
+      "SELECT original_url FROM short_links WHERE short_id = $1",
       [req.params.short_id]
     );
 
@@ -148,7 +147,7 @@ app.get("/:short_id", async (req, res) => {
     const target = result.rows[0].original_url;
 
     await pool.query(
-      "UPDATE short_links SET clicks = clicks + 1 WHERE short_id=$1",
+      "UPDATE short_links SET clicks = clicks + 1 WHERE short_id = $1",
       [req.params.short_id]
     );
 
