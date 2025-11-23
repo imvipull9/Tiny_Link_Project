@@ -10,7 +10,7 @@ const pool = require("./db");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ---------------------- CORS FIX ----------------------
+// ---------------------- CORS ----------------------
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN,
@@ -48,14 +48,15 @@ function generateCode(length = 6) {
 // ---------------------- CREATE SHORT LINK ----------------------
 app.post("/api/links", async (req, res) => {
   try {
-    const { targetUrl, code: custom } = req.body;
+    const { original_url, short_id } = req.body; // ✅ FIXED
 
-    if (!targetUrl || !isValidUrl(targetUrl)) {
-      return res.status(400).json({ error: "Valid targetUrl is required" });
+    if (!original_url || !isValidUrl(original_url)) {
+      return res.status(400).json({ error: "Valid original_url is required" });
     }
 
-    let finalCode = custom?.trim();
+    let finalCode = short_id?.trim();
 
+    // If custom short_id provided, check if exists
     if (finalCode) {
       const exists = await pool.query(
         "SELECT short_id FROM short_links WHERE short_id=$1",
@@ -63,10 +64,10 @@ app.post("/api/links", async (req, res) => {
       );
 
       if (exists.rows.length > 0) {
-        return res.status(409).json({ error: "Short code already exists" });
+        return res.status(409).json({ error: "Short ID already exists" });
       }
     } else {
-      // auto-generate unique
+      // Auto-generate unique short_id
       let unique = false;
       while (!unique) {
         const candidate = generateCode(6);
@@ -84,13 +85,10 @@ app.post("/api/links", async (req, res) => {
     const insertQuery = `
       INSERT INTO short_links (short_id, original_url)
       VALUES ($1, $2)
-      RETURNING short_id AS code,
-               original_url AS "targetUrl",
-               clicks,
-               created_at AS "createdAt"
+      RETURNING short_id, original_url, clicks, created_at
     `;
 
-    const result = await pool.query(insertQuery, [finalCode, targetUrl]);
+    const result = await pool.query(insertQuery, [finalCode, original_url]);
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -103,10 +101,7 @@ app.post("/api/links", async (req, res) => {
 app.get("/api/links", async (req, res) => {
   try {
     const q = `
-      SELECT short_id AS code,
-             original_url AS "targetUrl",
-             clicks,
-             created_at AS "createdAt"
+      SELECT short_id, original_url, clicks, created_at
       FROM short_links
       ORDER BY created_at DESC
     `;
@@ -120,11 +115,11 @@ app.get("/api/links", async (req, res) => {
 });
 
 // ---------------------- DELETE LINK ----------------------
-app.delete("/api/links/:code", async (req, res) => {
+app.delete("/api/links/:short_id", async (req, res) => {
   try {
     const deleted = await pool.query(
       "DELETE FROM short_links WHERE short_id=$1",
-      [req.params.code]
+      [req.params.short_id]
     );
 
     if (deleted.rowCount === 0) {
@@ -139,11 +134,11 @@ app.delete("/api/links/:code", async (req, res) => {
 });
 
 // ---------------------- REDIRECT ----------------------
-app.get("/r/:code", async (req, res) => {
+app.get("/:short_id", async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT original_url FROM short_links WHERE short_id=$1",
-      [req.params.code]
+      [req.params.short_id]
     );
 
     if (result.rows.length === 0) {
@@ -153,8 +148,8 @@ app.get("/r/:code", async (req, res) => {
     const target = result.rows[0].original_url;
 
     await pool.query(
-      "UPDATE short_links SET clicks = clicks + 1, last_clicked = NOW() WHERE short_id=$1",
-      [req.params.code]
+      "UPDATE short_links SET clicks = clicks + 1 WHERE short_id=$1",
+      [req.params.short_id]
     );
 
     return res.redirect(target);
