@@ -3,23 +3,35 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
+// ----------------------------
+// Validate ENV
+// ----------------------------
 if (!process.env.DATABASE_URL) {
   console.error("❌ ERROR: DATABASE_URL is missing in .env");
   process.exit(1);
 }
 
+// ----------------------------
+// Determine Environment
+// ----------------------------
 const isProduction = process.env.NODE_ENV === "production";
 
+// ----------------------------
+// Create Pool
+// ----------------------------
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: isProduction
-    ? { rejectUnauthorized: false } // required for Neon on Render
-    : false,
-  idleTimeoutMillis: 30000, // connection cleanup
-  connectionTimeoutMillis: 5000, // avoid hanging
+    ? { rejectUnauthorized: false } // Required for Neon/Render
+    : false, // Local PG does not need SSL
+  max: 10, // max concurrent connections (Neon limit friendly)
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
-// Test connection ONCE
+// ----------------------------
+// Optional: Test DB Connection Once
+// ----------------------------
 pool
   .connect()
   .then((client) => {
